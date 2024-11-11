@@ -1,50 +1,52 @@
 # This Dockerfile is intended to be built from the top of the repo (not this directory)
 ARG XO_VERSION=latest
-ARG TERRAFORM_VERSION=1.3.6
-ARG RUN_IMG=debian:11.3-slim
-ARG TF_CACHE_DIR=/tfcache
+ARG TERRAFORM_VERSION=1.5.7
+ARG CHECKOV_VERSION=3.2.268
+ARG OPA_VERSION=0.69.0
+ARG RUN_IMG=debian:12.7-slim
 ARG USER=massdriver
 ARG UID=10001
 
-# FROM 005022811284.dkr.ecr.us-west-2.amazonaws.com/massdriver-cloud/xo:${XO_VERSION} as xo
+FROM 005022811284.dkr.ecr.us-west-2.amazonaws.com/massdriver-cloud/xo:${XO_VERSION} AS xo
 
-FROM ${RUN_IMG} as bundles
+FROM ${RUN_IMG} AS build
 ARG TERRAFORM_VERSION
-ARG TF_CACHE_DIR
+ARG CHECKOV_VERSION
+ARG OPA_VERSION
 
 # install terraform, opa, yq, massdriver cli, kubectl
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y curl unzip make jq && \
     rm -rf /var/lib/apt/lists/* && \
     curl -sSL https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip > terraform.zip && unzip -d /usr/local/bin/ terraform.zip && rm *.zip && \
-    curl -sSL https://openpolicyagent.org/downloads/v0.41.0/opa_linux_amd64_static > /usr/local/bin/opa && chmod a+x /usr/local/bin/opa && \
-    curl -sSL https://github.com/bridgecrewio/checkov/releases/download/3.2.38/checkov_linux_X86_64_3.2.38.zip > checkov.zip && unzip -d /usr/local/bin/ checkov.zip && rm *.zip
+    curl -sSL https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_amd64_static > /usr/local/bin/opa && chmod a+x /usr/local/bin/opa && \
+    curl -sSL https://github.com/bridgecrewio/checkov/releases/download/${CHECKOV_VERSION}/checkov_linux_X86_64.zip > checkov.zip && unzip checkov.zip && mv dist/checkov /usr/local/bin/ && rm *.zip
+
+COPY --from=xo /usr/bin/xo /usr/local/bin/xo
 
 FROM ${RUN_IMG}
-ARG TF_CACHE_DIR
 ARG USER
 ARG UID
 
-RUN apt update && apt install -y git jq vim-tiny && \
+RUN apt update && apt install -y ca-certificates jq git && \
     rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -m 777 /out
-RUN mkdir -m 777 /scratch
-RUN mkdir -p -m 777 /src/bundles
+RUN mkdir -p -m 777 /massdriver
 
 RUN adduser \
     --disabled-password \
     --gecos "" \
     --uid $UID \
     $USER
-RUN chown -R $USER:$USER /src
+RUN chown -R $USER:$USER /massdriver
 USER $USER
 
-COPY --from=bundles /usr/local/bin/* /usr/local/bin/
+COPY --from=build /usr/local/bin/* /usr/local/bin/
+COPY ./opa /opa
 COPY entrypoint.sh /usr/local/bin/
 
 ENV MASSDRIVER_PROVISIONER=terraform
 
-WORKDIR /src/bundles
+WORKDIR /massdriver
 
 ENTRYPOINT ["entrypoint.sh"]
