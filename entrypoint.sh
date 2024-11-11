@@ -9,6 +9,30 @@ config_path="$entrypoint_dir/config.json"
 envs_path="$entrypoint_dir/envs.json"
 secrets_path="$entrypoint_dir/secrets.json"
 
+# Extract provisioner configuration
+json_output=$(jq -r '.json // false' "$config_path")
+
+# Extract Checkov configuration
+checkov_enabled=$(jq -r '.checkov.enable // true' "$config_path")
+checkov_quiet=$(jq -r '.checkov.quiet // true' "$config_path")
+checkov_halt_on_failure=$(jq -r '.checkov.halt_on_failure // false' "$config_path")
+
+function evaluate_checkov() {
+    if [ "$checkov_enabled" = "true" ]; then
+        echo "evaluating Checkov policies"
+        checkov_flags=""
+
+        if [ "$checkov_quiet" = "true" ]; then
+            checkov_flags+=" --quiet"
+        fi
+        if [ "$checkov_halt_on_failure" = "false" ]; then
+            checkov_flags+=" --soft-fail"
+        fi
+
+        checkov --framework terraform_plan -f tfplan.json $checkov_flags --download-external-modules false --repo-root-for-plan-enrichment . --deep-analysis
+    fi
+}
+
 # Setup envs for Massdriver HTTP state backend 
 MASSDRIVER_SHORT_PACKAGE_NAME=$(echo $MASSDRIVER_PACKAGE_NAME | sed 's/-[a-z0-9]\{4\}$//')
 export TF_HTTP_USERNAME=${MASSDRIVER_DEPLOYMENT_ID}
@@ -19,8 +43,8 @@ export TF_HTTP_UNLOCK_ADDRESS=${TF_HTTP_ADDRESS}
 
 # Have to copy the secrets file to the bundle directory for backwards compatibility with the legacy provisioner.
 # This has been deprecated and should be removed in the future once users have had a chance to update their bundles.
-if [ -f secrets.json ]; then
-    cp secrets.json bundle/secrets.json
+if [ -f "$secrets_path" ]; then
+    cp "$secrets_path" "$entrypoint_dir/bundle/secrets.json"
 fi
 
 cd bundle/$MASSDRIVER_STEP_PATH
@@ -30,6 +54,10 @@ cp "$connections_path" _connections.auto.tfvars.json
 cp "$params_path" _params.auto.tfvars.json
 
 tf_flags="-input=false"
+if [ "$json_output" = "true" ]; then
+    tf_flags+=" -json"
+fi
+
 case $MASSDRIVER_DEPLOYMENT_ACTION in
     plan )
         command=plan
@@ -39,7 +67,7 @@ case $MASSDRIVER_DEPLOYMENT_ACTION in
         ;;
     decommission )
         command=destroy
-        tf_flags="${tf_flags} -destroy"
+        tf_flags+=" -destroy"
         ;;
     *)
         echo "Unsupported action: $action"
@@ -47,14 +75,19 @@ case $MASSDRIVER_DEPLOYMENT_ACTION in
         ;;
 esac
 
-xo provisioner terraform backend http -s $MASSDRIVER_STEP_PATH -o backend.tf.json
+xo provisioner terraform backend http -s "$MASSDRIVER_STEP_PATH" -o backend.tf.json
 
 terraform init -input=false
 terraform plan $tf_flags -out tf.plan
 
-# check for invalid deletions if this isn't a destroy
-if [ $command != "destroy" ]; then
+# Run validations if the command is not 'destroy'
+if [ "$MASSDRIVER_DEPLOYMENT_ACTION" != "decommission" ]; then
     terraform show -json tf.plan > tfplan.json
+
+    # Run Checkov if enabled
+    evaluate_checkov
+
+    # Check for invalid deletions
     if [ -f validations.json ]; then
         echo "evaluating OPA rules"
         opa eval --fail-defined --data /opa/terraform.rego --input tfplan.json --data validations.json "data.terraform.deletion_violations[x]" > /dev/null
