@@ -50,6 +50,12 @@ After every provision, this provider will scan the module directory for files ma
     "connections": {
         ...
     },
+    "envs": {
+        ...
+    },
+    "secrets": {
+        ...
+    },
     "outputs": {
         ...
     }
@@ -126,6 +132,8 @@ In this case, the input to the `artifact_bucket.jq` template file would be:
             }
         }
     },
+    "envs": {},
+    "secrets": {},
     "outputs": {
         "artifact_bucket": {
             "data": {
