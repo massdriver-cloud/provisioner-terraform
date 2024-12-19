@@ -11,6 +11,7 @@ secrets_path="$entrypoint_dir/secrets.json"
 
 # Extract provisioner configuration
 json_output=$(jq -r '.json // false' "$config_path")
+name_prefix=$(jq -r '.md_metadata.name_prefix' "$params_path")
 
 # Extract Checkov configuration
 checkov_enabled=$(jq -r '.checkov.enable // true' "$config_path")
