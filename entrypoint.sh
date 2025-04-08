@@ -28,7 +28,7 @@ jq_bool_default() {
   jq -r "if $query == null then $default else $query end" "$data"
 }
 # Utility function for evaluating Checkov policies
-function evaluate_checkov() {
+evaluate_checkov() {
     if [ "$checkov_enabled" = "true" ]; then
         echo "evaluating Checkov policies"
         checkov_flags=""
@@ -39,7 +39,7 @@ function evaluate_checkov() {
         if [ "$checkov_halt_on_failure" = "false" ]; then
             checkov_flags+=" --soft-fail"
         fi
-        
+
         # Setting log level error to avoid Checkov's unavoidable WARNING about not downloading external modules
         LOG_LEVEL=error checkov --download-external-modules false --repo-root-for-plan-enrichment . --deep-analysis  $checkov_flags --framework terraform_plan -f tfplan.json
     fi
