@@ -59,8 +59,8 @@ MASSDRIVER_SHORT_PACKAGE_NAME=$(echo $MASSDRIVER_PACKAGE_NAME | sed 's/-[a-z0-9]
 export TF_HTTP_USERNAME=${MASSDRIVER_DEPLOYMENT_ID}
 export TF_HTTP_PASSWORD=${MASSDRIVER_TOKEN}
 export TF_HTTP_ADDRESS="https://api.massdriver.cloud/state/${MASSDRIVER_SHORT_PACKAGE_NAME}/${MASSDRIVER_STEP_PATH}"
-# export TF_HTTP_LOCK_ADDRESS=${TF_HTTP_ADDRESS}
-# export TF_HTTP_UNLOCK_ADDRESS=${TF_HTTP_ADDRESS}
+export TF_HTTP_LOCK_ADDRESS=${TF_HTTP_ADDRESS}
+export TF_HTTP_UNLOCK_ADDRESS=${TF_HTTP_ADDRESS}
 
 # Have to copy the secrets file to the bundle directory for backwards compatibility with the legacy provisioner.
 # This has been deprecated and should be removed in the future once users have had a chance to update their bundles.
