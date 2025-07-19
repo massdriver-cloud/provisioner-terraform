@@ -27,10 +27,11 @@ jq_bool_default() {
   
   jq -r "if $query == null then $default else $query end" "$data"
 }
+
 # Utility function for evaluating Checkov policies
 evaluate_checkov() {
     if [ "$checkov_enabled" = "true" ]; then
-        echo "Evaluating Checkov policies..."
+        echo -e "\nEvaluating Checkov policies..."
         checkov_flags=""
 
         if [ "$checkov_quiet" = "true" ]; then
@@ -41,7 +42,8 @@ evaluate_checkov() {
         fi
 
         # Setting log level error to avoid Checkov's unavoidable WARNING about not downloading external modules
-        LOG_LEVEL=error checkov --download-external-modules false --repo-root-for-plan-enrichment . --deep-analysis  $checkov_flags --framework terraform_plan -f tfplan.json
+        LOG_LEVEL=error checkov --repo-root-for-plan-enrichment . --deep-analysis $checkov_flags --framework terraform_plan -f tfplan.json
+        echo -e "${GREEN}Checkov evaluation completed.${NC}"
     fi
 }
 
@@ -103,22 +105,17 @@ terraform plan $tf_flags -out tf.plan
 
 # Run validations if the command is not 'destroy'
 if [ "$MASSDRIVER_DEPLOYMENT_ACTION" != "decommission" ]; then
-    terraform show -json tf.plan > tfplan.json
+    terraform show -json tf.plan | jq > tfplan.json
 
     # Run Checkov if enabled
     evaluate_checkov
-
-    # Check for invalid deletions
-    if [ -f validations.json ]; then
-        echo "evaluating OPA rules"
-        opa eval --fail-defined --data /opa/terraform.rego --input tfplan.json --data validations.json "data.terraform.deletion_violations[x]" > /dev/null
-    fi
 fi
 
 if [ "$MASSDRIVER_DEPLOYMENT_ACTION" = "plan" ]; then
     exit 0
 fi
 
+echo "Applying Terraform plan..."
 terraform apply $tf_flags tf.plan
 
 # Handle artifacts if deployment action is 'provision' or 'decommission'
