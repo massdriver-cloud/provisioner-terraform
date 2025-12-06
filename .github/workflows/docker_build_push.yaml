@@ -8,8 +8,14 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
+      max-parallel: 1
       matrix:
-        terraform_version: [1.3.10, 1.4.7, 1.5.7]  # Full semver versions
+        include: # Full semver versions
+          - terraform_version: 1.3.10
+          - terraform_version: 1.4.7
+          - terraform_version: 1.5.7
+            is_latest: true
 
     steps:
       - name: Checkout repository
@@ -23,17 +29,6 @@ jobs:
           MAJOR_MINOR=$(echo "$VERSION" | awk -F. '{print $1"."$2}')
           echo "MAJOR_MINOR_VERSION=$MAJOR_MINOR" >> $GITHUB_ENV
 
-          # Prepare a sorted list to determine the latest version
-          # Read all versions into array and sort them
-          IFS=' ' read -ra versions <<< "${{ join(matrix.terraform_version, ' ') }}"
-          sorted_versions=($(printf '%s\n' "${versions[@]}" | sort -V))
-          
-          # Get the last element (highest version)
-          latest_full_version="${sorted_versions[$((${#sorted_versions[@]}-1))]}"
-          latest_major_minor=$(echo "$latest_full_version" | awk -F. '{print $1"."$2}')
-
-          echo "LATEST_MAJOR_MINOR_VERSION=$latest_major_minor" >> $GITHUB_ENV
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -45,5 +40,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: massdrivercloud/provisioner-terraform:${{ env.MAJOR_MINOR_VERSION }}${{ env.MAJOR_MINOR_VERSION == env.LATEST_MAJOR_MINOR_VERSION && ',massdrivercloud/provisioner-terraform:latest' || '' }}
           build-args: TERRAFORM_VERSION=${{ matrix.terraform_version }}
+          tags: |
+            massdrivercloud/provisioner-terraform:${{ env.MAJOR_MINOR_VERSION }}
+            ${{ matrix.is_latest && 'massdrivercloud/provisioner-terraform:latest' || '' }}
