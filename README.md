@@ -3,4 +3,4 @@
 
 [Massdriver](https://www.massdriver.cloud/) provisioner for managing resources with [Terraform](https://www.terraform.io/).
 
-For more information, check the [Massdriver provisioner docs](https://docs.massdriver.cloud/provisioners/terraform).
+For more information, check the [Massdriver provisioner docs](https://docs.massdriver.cloud/bundle-development/provisioners/terraform).
